@@ -1,7 +1,9 @@
 package org.example.controller.filter;
 
 import lombok.Getter;
+import lombok.ToString;
 
+@ToString
 @Getter
 public class SearchCriteria {
     private final String key;

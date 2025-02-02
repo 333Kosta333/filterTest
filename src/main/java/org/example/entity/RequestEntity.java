@@ -2,6 +2,7 @@ package org.example.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.BatchSize;
 
 import java.io.Serializable;
 import java.time.LocalDateTime;
@@ -42,10 +43,12 @@ public class RequestEntity implements Serializable {
     @ToString.Include
     private LocalDateTime createOn = LocalDateTime.now();
 
+    @BatchSize(size = 20)
     @OneToMany(mappedBy = "requestEntity", orphanRemoval = true)
-    private Set<PartnerEntity> partnerEntities = new HashSet<>();
+    private Set<PartnerEntity> partners = new HashSet<>();
 
+    @BatchSize(size = 20)
     @OneToMany(mappedBy = "requestEntity", orphanRemoval = true)
-    private Set<ServiceObjectEntity> serviceObjectEntities = new HashSet<>();
+    private Set<ServiceObjectEntity> serviceObjects = new HashSet<>();
 
 }

@@ -8,8 +8,8 @@ insert into requests (id, type_id, template_id) values ('00000000-0000-0000-0000
 insert into requests (id, type_id, template_id) values ('00000000-0000-0000-0000-a00000000005', 'U2', 'Request 5');
 insert into requests (id, type_id, template_id) values ('00000000-0000-0000-0000-a00000000006', 'U2', 'Request 6');
 
-insert into partners (id, name, description, request_uuid) values ('00000000-0000-0000-0000-f00000000001', 'P1', 'descr', '00000000-0000-0000-0000-a00000000001');
-insert into partners (id, name, description, request_uuid) values ('00000000-0000-0000-0000-f00000000002', 'P2', 'descr', '00000000-0000-0000-0000-a00000000001');
+insert into partners (id, name, description, request_uuid) values ('00000000-0000-0000-0000-f00000000001', 'P1', 'descr P1', '00000000-0000-0000-0000-a00000000001');
+insert into partners (id, name, description, request_uuid) values ('00000000-0000-0000-0000-f00000000002', 'P2', 'descr P2', '00000000-0000-0000-0000-a00000000001');
 
-insert into partners (id, name, description, request_uuid) values ('00000000-0000-0000-0000-f00000000003', 'P3', 'descr', '00000000-0000-0000-0000-a00000000002');
-insert into partners (id, name, description, request_uuid) values ('00000000-0000-0000-0000-f00000000004', 'P4', 'descr', '00000000-0000-0000-0000-a00000000002');
+insert into partners (id, name, description, request_uuid) values ('00000000-0000-0000-0000-f00000000003', 'P1', 'descr P3', '00000000-0000-0000-0000-a00000000002');
+insert into partners (id, name, description, request_uuid) values ('00000000-0000-0000-0000-f00000000004', 'P4', 'descr P4', '00000000-0000-0000-0000-a00000000002');
