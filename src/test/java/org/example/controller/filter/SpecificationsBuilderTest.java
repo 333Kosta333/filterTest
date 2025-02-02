@@ -29,10 +29,6 @@ class SpecificationsBuilderTest {
             scripts = "create-test-data.sql",
             executionPhase = BEFORE_TEST_METHOD
     )
-    @Sql(
-            scripts = "delete-test-data.sql",
-            executionPhase = AFTER_TEST_METHOD
-    )
     void testBuild() {
         SpecificationsBuilder parser = new SpecificationsBuilder();
         String filter = "templateId like '%equ%';requestType.id eq 'U1'";

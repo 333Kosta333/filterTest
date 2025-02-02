@@ -42,12 +42,12 @@ public class SpecificationsBuilder {
         return this;
     }
 
-    public Specification<RequestEntity> build() {
+    public <E> Specification<E> build() {
         if (params.isEmpty()) {
             return null;
         }
 
-        Specification<RequestEntity> result = new GenericSpecification<>(params.get(0));
+        Specification<E> result = new GenericSpecification<>(params.get(0));
 
         for (int i = 1; i < params.size(); i++) {
             result = Specification.where(result).and(new GenericSpecification<>(params.get(i)));
