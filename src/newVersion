@@ -1,0 +1,165 @@
+import java.util.*;
+import java.util.regex.*;
+
+public class FilterParser {
+
+    public static List<SearchCriteria> parse(String filter) {
+        List<SearchCriteria> criteriaList = new ArrayList<>();
+        Pattern pattern = Pattern.compile("(\\w+(?:\\.\\w+)*)\\s+(\\w+)\\s+('.*?'|\\d+\\.\\d+\\.\\d+\\s+\\d+:\\d+:\\d+|\\d+)");
+        Matcher matcher = pattern.matcher(filter);
+
+        while (matcher.find()) {
+            String key = matcher.group(1); // Поле (например, "requestType.type")
+            String operation = matcher.group(2); // Операция (например, "eq")
+            String value = matcher.group(3).replaceAll("^'|'$", ""); // Значение (например, "U1")
+
+            SearchOperation searchOperation = SearchOperation.fromString(operation);
+            criteriaList.add(new SearchCriteria(key, value, searchOperation));
+        }
+
+        return criteriaList;
+    }
+}
+import org.springframework.data.jpa.domain.Specification;
+import javax.persistence.criteria.*;
+import java.util.*;
+import java.sql.Timestamp;
+
+public class GenericSpecification<T> implements Specification<T> {
+
+    private final List<SearchCriteria> criteriaList;
+
+    public GenericSpecification(List<SearchCriteria> criteriaList) {
+        this.criteriaList = criteriaList;
+    }
+
+    @Override
+    public Predicate toPredicate(Root<T> root, CriteriaQuery<?> query, CriteriaBuilder builder) {
+        List<Predicate> predicates = new ArrayList<>();
+
+        for (SearchCriteria criteria : criteriaList) {
+            String key = criteria.getKey();
+            Object value = criteria.getValue();
+            SearchOperation operation = criteria.getOperation();
+
+            String[] keys = key.split("\\.");
+            Path<?> path = resolvePath(root, keys);
+
+            Predicate predicate = createPredicate(path, value, operation, builder);
+            predicates.add(predicate);
+        }
+
+        return builder.and(predicates.toArray(new Predicate[0]));
+    }
+
+    private Path<?> resolvePath(Root<?> root, String[] keys) {
+        Path<?> path = root;
+        for (int i = 0; i < keys.length; i++) {
+            String key = keys[i];
+
+            if (i == keys.length - 1) {
+                return path.get(key);
+            }
+
+            if (path instanceof Join<?, ?>) {
+                path = ((Join<?, ?>) path).get(key);
+            } else {
+                path = ((From<?, ?>) path).join(key, JoinType.INNER);
+            }
+        }
+        return path;
+    }
+
+    private Predicate createPredicate(Path<?> path, Object value, SearchOperation operation, CriteriaBuilder builder) {
+        Class<?> fieldType = path.getJavaType();
+
+        if (fieldType.equals(String.class)) {
+            return handleStringPredicate(path, value, operation, builder);
+        } else if (fieldType.equals(Long.class) || fieldType.equals(long.class)) {
+            return handleLongPredicate(path, value, operation, builder);
+        } else if (fieldType.equals(Timestamp.class) || fieldType.equals(Date.class)) {
+            return handleTimestampPredicate(path, value, operation, builder);
+        } else {
+            throw new IllegalArgumentException("Unsupported field type: " + fieldType);
+        }
+    }
+
+    private Predicate handleStringPredicate(Path<?> path, Object value, SearchOperation operation, CriteriaBuilder builder) {
+        String stringValue = value.toString();
+        switch (operation) {
+            case EQUAL:
+                return builder.equal(path, stringValue);
+            case NOT_EQUAL:
+                return builder.notEqual(path, stringValue);
+            default:
+                throw new IllegalArgumentException("Unsupported operation for String: " + operation);
+        }
+    }
+
+    private Predicate handleLongPredicate(Path<?> path, Object value, SearchOperation operation, CriteriaBuilder builder) {
+        Long longValue = Long.parseLong(value.toString());
+        switch (operation) {
+            case GREATER_THAN:
+                return builder.greaterThan(path.as(Long.class), longValue);
+            case LESS_THAN:
+                return builder.lessThan(path.as(Long.class), longValue);
+            default:
+                throw new IllegalArgumentException("Unsupported operation for Long: " + operation);
+        }
+    }
+
+    private Predicate handleTimestampPredicate(Path<?> path, Object value, SearchOperation operation, CriteriaBuilder builder) {
+        Timestamp timestampValue = Timestamp.valueOf(value.toString());
+        switch (operation) {
+            case GREATER_THAN:
+                return builder.greaterThan(path.as(Timestamp.class), timestampValue);
+            case LESS_THAN:
+                return builder.lessThan(path.as(Timestamp.class), timestampValue);
+            default:
+                throw new IllegalArgumentException("Unsupported operation for Timestamp: " + operation);
+        }
+    }
+}
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.web.bind.annotation.*;
+
+@RestController
+@RequestMapping("/requests")
+public class RequestController {
+
+    @Autowired
+    private RequestService requestService;
+
+    @GetMapping("/search")
+    public Page<Request> searchRequests(
+            @RequestParam String filter, // Строка фильтров
+            @RequestParam(defaultValue = "0") int page, // Номер страницы
+            @RequestParam(defaultValue = "10") int size, // Размер страницы
+            @RequestParam(defaultValue = "id,asc") String sort // Сортировка
+    ) {
+        Pageable pageable = PageRequest.of(page, size, Sort.by(sort.split(",")[0].trim()));
+        return requestService.searchRequests(filter, pageable);
+    }
+}
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
+import org.springframework.stereotype.Service;
+
+@Service
+public class RequestService {
+
+    @Autowired
+    private RequestRepository requestRepository;
+
+    public Page<Request> searchRequests(String filter, Pageable pageable) {
+        List<SearchCriteria> criteriaList = FilterParser.parse(filter);
+        Specification<Request> spec = new GenericSpecification<>(criteriaList);
+        return requestRepository.findAll(spec, pageable);
+    }
+}
