@@ -21,16 +21,21 @@ public class FilterParser {
     }
 }
 import org.springframework.data.jpa.domain.Specification;
+import javax.persistence.EntityManager;
 import javax.persistence.criteria.*;
-import java.util.*;
+import javax.persistence.metamodel.EntityType;
+import javax.persistence.metamodel.Metamodel;
 import java.sql.Timestamp;
+import java.util.*;
 
 public class GenericSpecification<T> implements Specification<T> {
 
     private final List<SearchCriteria> criteriaList;
+    private final EntityManager entityManager; // Добавляем EntityManager
 
-    public GenericSpecification(List<SearchCriteria> criteriaList) {
+    public GenericSpecification(List<SearchCriteria> criteriaList, EntityManager entityManager) {
         this.criteriaList = criteriaList;
+        this.entityManager = entityManager; // Инициализируем EntityManager
     }
 
     @Override
@@ -61,13 +66,29 @@ public class GenericSpecification<T> implements Specification<T> {
                 return path.get(key);
             }
 
-            if (path instanceof Join<?, ?>) {
-                path = ((Join<?, ?>) path).get(key);
+            if (isInheritedField(path, key)) {
+                path = path.get(key); // Для наследуемых полей
             } else {
-                path = ((From<?, ?>) path).join(key, JoinType.INNER);
+                path = ((From<?, ?>) path).join(key, JoinType.INNER); // Для обычных полей
             }
         }
         return path;
+    }
+
+    private boolean isInheritedField(Path<?> path, String fieldName) {
+        Metamodel metamodel = entityManager.getMetamodel();
+        EntityType<?> entityType = metamodel.entity(path.getJavaType());
+
+        if (entityType.getAttribute(fieldName) != null) {
+            return false;
+        }
+
+        if (entityType.getSupertype() != null) {
+            EntityType<?> superType = entityType.getSupertype();
+            return superType.getAttribute(fieldName) != null;
+        }
+
+        return false;
     }
 
     private Predicate createPredicate(Path<?> path, Object value, SearchOperation operation, CriteriaBuilder builder) {
@@ -84,40 +105,32 @@ public class GenericSpecification<T> implements Specification<T> {
         }
     }
 
-    private Predicate handleStringPredicate(Path<?> path, Object value, SearchOperation operation, CriteriaBuilder builder) {
-        String stringValue = value.toString();
-        switch (operation) {
-            case EQUAL:
-                return builder.equal(path, stringValue);
-            case NOT_EQUAL:
-                return builder.notEqual(path, stringValue);
-            default:
-                throw new IllegalArgumentException("Unsupported operation for String: " + operation);
-        }
-    }
+    // Методы handleStringPredicate, handleLongPredicate и т.д. остаются без изменений
+}
 
-    private Predicate handleLongPredicate(Path<?> path, Object value, SearchOperation operation, CriteriaBuilder builder) {
-        Long longValue = Long.parseLong(value.toString());
-        switch (operation) {
-            case GREATER_THAN:
-                return builder.greaterThan(path.as(Long.class), longValue);
-            case LESS_THAN:
-                return builder.lessThan(path.as(Long.class), longValue);
-            default:
-                throw new IllegalArgumentException("Unsupported operation for Long: " + operation);
-        }
-    }
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.stereotype.Service;
+import javax.persistence.EntityManager;
+import java.util.List;
 
-    private Predicate handleTimestampPredicate(Path<?> path, Object value, SearchOperation operation, CriteriaBuilder builder) {
-        Timestamp timestampValue = Timestamp.valueOf(value.toString());
-        switch (operation) {
-            case GREATER_THAN:
-                return builder.greaterThan(path.as(Timestamp.class), timestampValue);
-            case LESS_THAN:
-                return builder.lessThan(path.as(Timestamp.class), timestampValue);
-            default:
-                throw new IllegalArgumentException("Unsupported operation for Timestamp: " + operation);
-        }
+@Service
+public class RequestService {
+
+    @Autowired
+    private EntityManager entityManager; // Внедряем EntityManager
+
+    @Autowired
+    private RequestRepository requestRepository;
+
+    public Page<Request> searchRequests(String filter, Pageable pageable) {
+        List<SearchCriteria> criteriaList = FilterParser.parse(filter);
+
+        // Создаем GenericSpecification с передачей EntityManager
+        GenericSpecification<Request> spec = new GenericSpecification<>(criteriaList, entityManager);
+
+        return requestRepository.findAll(spec, pageable);
     }
 }
 import org.springframework.beans.factory.annotation.Autowired;
